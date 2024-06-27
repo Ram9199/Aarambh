@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: aarambh
+Version: 0.1
+Requires-Dist: torch
+Requires-Dist: transformers
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: opencv-python
+Requires-Dist: pytesseract
+Requires-Dist: SpeechRecognition
+Requires-Dist: pydub
