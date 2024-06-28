@@ -48,7 +48,9 @@ except Exception as e:
     raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
 
 try:
-    voice_recog = LiveVoiceRecognition()
+    model_dir_sr = os.path.join(current_dir, "voice_recognition", "models", "wav2vec2-large-xlsr-53")
+    model_dir_er = os.path.join(current_dir, "voice_recognition", "models", "wav2vec2-lg-xlsr-en-speech-emotion-recognition")
+    voice_recog = LiveVoiceRecognition(model_dir_sr, model_dir_er)
 except Exception as e:
     logger.error(f"Failed to initialize voice recognition model: {e}")
     raise HTTPException(status_code=500, detail=f"Failed to initialize voice recognition model: {e}")
@@ -73,10 +75,6 @@ class TranslateRequest(BaseModel):
 
 class ImageRecognitionRequest(BaseModel):
     image_path: str
-
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Aarambh API"}
 
 @app.post("/generate/")
 def generate_response(request: QueryRequest):
@@ -108,8 +106,7 @@ def recognize_text_in_image(request: ImageRecognitionRequest):
 @app.post("/voice_recognition/speech/")
 def recognize_speech():
     try:
-        audio_file = voice_recog.record_audio()
-        text = voice_recog.recognize_speech(audio_file)
+        text = voice_recog.recognize_speech()
         return {"recognized_speech": text}
     except Exception as e:
         logger.error(f"Error recognizing speech: {e}")
@@ -118,8 +115,7 @@ def recognize_speech():
 @app.post("/voice_recognition/emotion/")
 def recognize_emotion():
     try:
-        audio_file = voice_recog.record_audio()
-        emotion = voice_recog.recognize_emotion(audio_file)
+        emotion = voice_recog.recognize_emotion()
         return {"recognized_emotion": emotion}
     except Exception as e:
         logger.error(f"Error recognizing emotion: {e}")
