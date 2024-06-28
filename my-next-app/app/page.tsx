@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import styled, { keyframes, ThemeProvider } from "styled-components";
-import { FaSun, FaMoon } from "react-icons/fa";
-import styles from "./Home.module.css";
+import { useState, FormEvent, ChangeEvent } from "react";
+import styled, {
+  keyframes,
+  ThemeProvider,
+  DefaultTheme,
+} from "styled-components";
+import {
+  FaSun,
+  FaMoon,
+  FaMicrophone,
+  FaPaperPlane,
+  FaFileUpload,
+} from "react-icons/fa";
 
-const lightTheme = {
+const lightTheme: DefaultTheme = {
   background: "#f0f0f0",
   text: "#000000",
   buttonBackground: "#0070f3",
@@ -16,7 +25,7 @@ const lightTheme = {
   hoverBackground: "#005bb5",
 };
 
-const darkTheme = {
+const darkTheme: DefaultTheme = {
   background: "#1c1c1c",
   text: "#ffffff",
   buttonBackground: "#0070f3",
@@ -36,64 +45,15 @@ const Container = styled.div`
   align-items: center;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.text};
-  font-family: "Roboto", sans-serif;
-  transition: all 0.3s ease;
+  height: 100vh;
+  position: relative;
 `;
 
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   width: 100%;
-`;
-
-const Title = styled.h1`
-  font-size: 36px;
-  margin-bottom: 20px;
-  animation: ${() => colorChange} 5s infinite;
-  background: linear-gradient(45deg, #f3ec78, #af4261, #0070f3);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-`;
-
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-`;
-
-const Input = styled.input`
-  padding: 10px;
-  font-size: 16px;
-  border: 2px solid ${(props) => props.theme.borderColor};
-  background-color: ${(props) => props.theme.inputBackground};
-  color: ${(props) => props.theme.inputText};
-  border-radius: 4px;
-  outline: none;
-  transition: border-color 0.3s;
-  &:focus {
-    border-color: #0070f3;
-  }
-`;
-
-const Button = styled.button`
-  padding: 10px;
-  font-size: 16px;
-  cursor: pointer;
-  background-color: ${(props) => props.theme.buttonBackground};
-  color: ${(props) => props.theme.buttonText};
-  border: none;
-  border-radius: 4px;
-  transition: background-color 0.3s, transform 0.2s;
-  &:hover {
-    background-color: ${(props) => props.theme.hoverBackground};
-    transform: scale(1.05);
-  }
-`;
-
-const Response = styled.p`
-  margin-top: 20px;
-  font-size: 18px;
+  align-items: center;
 `;
 
 const colorChange = keyframes`
@@ -103,15 +63,83 @@ const colorChange = keyframes`
   100% { color: red; }
 `;
 
-const TypingAnimation = keyframes`
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
+const Title = styled.h1`
+  font-size: 36px;
+  margin-bottom: 20px;
+  animation: ${colorChange} 5s infinite;
+  background: linear-gradient(45deg, #f3ec78, #af4261, #0070f3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 `;
 
-const Loading = styled.span`
-  font-size: 18px;
-  animation: ${TypingAnimation} 1s infinite;
+const Form = styled.form`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  position: absolute;
+  bottom: 20px;
+  background-color: ${(props) => props.theme.inputBackground};
+  padding: 10px;
+  border-radius: 25px;
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+`;
+
+const Input = styled.input`
+  padding: 10px;
+  font-size: 16px;
+  border: none;
+  background-color: ${(props) => props.theme.inputBackground};
+  color: ${(props) => props.theme.inputText};
+  outline: none;
+  flex-grow: 1;
+  border-radius: 25px;
+`;
+
+const SubmitButton = styled.button`
+  padding: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: ${(props) => props.theme.buttonBackground};
+  color: ${(props) => props.theme.buttonText};
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+  &:hover {
+    background-color: ${(props) => props.theme.hoverBackground};
+  }
+`;
+
+const ChatContainer = styled.div`
+  width: 100%;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  background-color: ${(props) => props.theme.inputBackground};
+  border: 1px solid ${(props) => props.theme.borderColor};
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 20px;
+`;
+
+interface ChatBubbleProps {
+  isUser: boolean;
+}
+
+const ChatBubble = styled.div<ChatBubbleProps>`
+  background-color: ${(props) => (props.isUser ? "#005bb5" : "#333")};
+  color: ${(props) => props.theme.buttonText};
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  max-width: 80%;
+  ${(props) => (props.isUser ? "margin-left: auto;" : "margin-right: auto;")}
+`;
+
+const FileUpload = styled.input`
+  display: none;
 `;
 
 const ToggleButton = styled.button`
@@ -126,13 +154,12 @@ const ToggleButton = styled.button`
 
 export default function Home() {
   const [prompt, setPrompt] = useState<string>("");
-  const [response, setResponse] = useState<string>("");
-  const [translatedText, setTranslatedText] = useState<string>("");
-  const [recognizedText, setRecognizedText] = useState<string>("");
-  const [recognizedSpeech, setRecognizedSpeech] = useState<string>("");
-  const [recognizedEmotion, setRecognizedEmotion] = useState<string>("");
+  const [chats, setChats] = useState<{ text: string; isUser: boolean }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [theme, setTheme] = useState(lightTheme);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
+    null
+  );
 
   const toggleTheme = () => {
     setTheme(theme === lightTheme ? darkTheme : lightTheme);
@@ -140,9 +167,20 @@ export default function Home() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!prompt.trim()) return;
+
+    setChats((prevChats) => [...prevChats, { text: prompt, isUser: true }]);
+    setPrompt("");
     setLoading(true);
+
+    let endpoint = "http://127.0.0.1:8000/generate/";
+
+    if (prompt.toLowerCase().includes("translate")) {
+      endpoint = "http://127.0.0.1:8000/translate/";
+    }
+
     try {
-      const res = await fetch("http://127.0.0.1:8000/generate/", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -152,130 +190,133 @@ export default function Home() {
 
       if (res.ok) {
         const data = await res.json();
-        setResponse(data.response);
+        setChats((prevChats) => [
+          ...prevChats,
+          { text: data.response || data.translated_text, isUser: false },
+        ]);
       } else {
-        setResponse("Error: Unable to fetch response.");
+        setChats((prevChats) => [
+          ...prevChats,
+          { text: "Error: Unable to fetch response.", isUser: false },
+        ]);
       }
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        setResponse(`Error: ${error.message}`);
-      } else {
-        setResponse("Error: Unknown error occurred.");
-      }
+      setChats((prevChats) => [
+        ...prevChats,
+        {
+          text:
+            error instanceof Error
+              ? `Error: ${error.message}`
+              : "Error: Unknown error occurred.",
+          isUser: false,
+        },
+      ]);
     }
     setLoading(false);
   };
 
-  const handleTranslate = async (text: string, targetLanguage: string) => {
-    setLoading(true);
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
     try {
-      const res = await fetch("http://127.0.0.1:8000/translate/", {
+      const res = await fetch("http://127.0.0.1:8000/upload/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text, target_language: targetLanguage }),
+        body: formData,
       });
 
       if (res.ok) {
         const data = await res.json();
-        setTranslatedText(data.translated_text);
+        setChats((prevChats) => [
+          ...prevChats,
+          { text: data.response, isUser: false },
+        ]);
       } else {
-        setTranslatedText("Error: Unable to translate text.");
+        setChats((prevChats) => [
+          ...prevChats,
+          { text: "Error: Unable to upload file.", isUser: false },
+        ]);
       }
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        setTranslatedText(`Error: ${error.message}`);
-      } else {
-        setTranslatedText("Error: Unknown error occurred.");
-      }
-    }
-    setLoading(false);
-  };
-
-  const handleImageRecognition = async (imagePath: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch("http://127.0.0.1:8000/image_recognition/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      setChats((prevChats) => [
+        ...prevChats,
+        {
+          text:
+            error instanceof Error
+              ? `Error: ${error.message}`
+              : "Error: Unknown error occurred.",
+          isUser: false,
         },
-        body: JSON.stringify({ image_path: imagePath }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setRecognizedText(data.recognized_text);
-      } else {
-        setRecognizedText("Error: Unable to recognize text.");
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setRecognizedText(`Error: ${error.message}`);
-      } else {
-        setRecognizedText("Error: Unknown error occurred.");
-      }
+      ]);
     }
-    setLoading(false);
   };
 
-  const handleSpeechRecognition = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        "http://127.0.0.1:8000/voice_recognition/speech/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+  const handleSpeechRecognition = () => {
+    if (!mediaRecorder) {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            const recorder = new MediaRecorder(stream);
+            setMediaRecorder(recorder);
 
-      if (res.ok) {
-        const data = await res.json();
-        setRecognizedSpeech(data.recognized_speech);
+            recorder.ondataavailable = async (e) => {
+              const audioBlob = new Blob([e.data], { type: "audio/wav" });
+              const formData = new FormData();
+              formData.append("file", audioBlob);
+
+              try {
+                const res = await fetch("http://127.0.0.1:8000/upload/", {
+                  method: "POST",
+                  body: formData,
+                });
+
+                if (res.ok) {
+                  const data = await res.json();
+                  setChats((prevChats) => [
+                    ...prevChats,
+                    { text: data.response, isUser: false },
+                  ]);
+                } else {
+                  setChats((prevChats) => [
+                    ...prevChats,
+                    { text: "Error: Unable to process audio.", isUser: false },
+                  ]);
+                }
+              } catch (error: unknown) {
+                setChats((prevChats) => [
+                  ...prevChats,
+                  {
+                    text:
+                      error instanceof Error
+                        ? `Error: ${error.message}`
+                        : "Error: Unknown error occurred.",
+                    isUser: false,
+                  },
+                ]);
+              }
+            };
+
+            recorder.start();
+            setTimeout(() => {
+              recorder.stop();
+            }, 5000); // Record for 5 seconds
+          })
+          .catch((err) => {
+            console.error("The following getUserMedia error occurred: " + err);
+          });
       } else {
-        setRecognizedSpeech("Error: Unable to recognize speech.");
+        console.error("getUserMedia not supported on your browser!");
       }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setRecognizedSpeech(`Error: ${error.message}`);
-      } else {
-        setRecognizedSpeech("Error: Unknown error occurred.");
-      }
+    } else {
+      mediaRecorder.start();
+      setTimeout(() => {
+        mediaRecorder.stop();
+      }, 5000); // Record for 5 seconds
     }
-    setLoading(false);
-  };
-
-  const handleEmotionRecognition = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        "http://127.0.0.1:8000/voice_recognition/emotion/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setRecognizedEmotion(data.recognized_emotion);
-      } else {
-        setRecognizedEmotion("Error: Unable to recognize emotion.");
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setRecognizedEmotion(`Error: ${error.message}`);
-      } else {
-        setRecognizedEmotion("Error: Unknown error occurred.");
-      }
-    }
-    setLoading(false);
   };
 
   return (
@@ -287,40 +328,39 @@ export default function Home() {
             {theme === lightTheme ? <FaMoon /> : <FaSun />}
           </ToggleButton>
         </Header>
+        <ChatContainer>
+          {chats.map((chat, index) => (
+            <ChatBubble key={index} isUser={chat.isUser}>
+              {chat.text}
+            </ChatBubble>
+          ))}
+          {loading && <ChatBubble isUser={false}>Typing...</ChatBubble>}
+        </ChatContainer>
         <Form onSubmit={handleSubmit}>
+          <SubmitButton as="span" onClick={handleSpeechRecognition}>
+            <FaMicrophone />
+          </SubmitButton>
+          <label htmlFor="file-upload">
+            <SubmitButton as="span">
+              <FaFileUpload />
+            </SubmitButton>
+          </label>
+          <FileUpload
+            id="file-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+          />
           <Input
             type="text"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Enter your prompt"
+            placeholder="Ask a question?"
           />
-          <Button type="submit">Submit</Button>
+          <SubmitButton type="submit">
+            <FaPaperPlane />
+          </SubmitButton>
         </Form>
-        {loading ? (
-          <Loading>Typing...</Loading>
-        ) : (
-          <Response>Response: {response}</Response>
-        )}
-
-        <h2>Translate Text</h2>
-        <Button onClick={() => handleTranslate("Hello", "es")}>
-          Translate 'Hello' to Spanish
-        </Button>
-        <Response>Translated Text: {translatedText}</Response>
-
-        <h2>Image Recognition</h2>
-        <Button onClick={() => handleImageRecognition("path_to_image.png")}>
-          Recognize Text in Image
-        </Button>
-        <Response>Recognized Text: {recognizedText}</Response>
-
-        <h2>Speech Recognition</h2>
-        <Button onClick={handleSpeechRecognition}>Recognize Speech</Button>
-        <Response>Recognized Speech: {recognizedSpeech}</Response>
-
-        <h2>Emotion Recognition</h2>
-        <Button onClick={handleEmotionRecognition}>Recognize Emotion</Button>
-        <Response>Recognized Emotion: {recognizedEmotion}</Response>
       </Container>
     </ThemeProvider>
   );

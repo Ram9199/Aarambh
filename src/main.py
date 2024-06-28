@@ -1,10 +1,12 @@
 import os
 import sys
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import logging
+import speech_recognition as sr
+from io import BytesIO
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +19,6 @@ sys.path.append(current_dir)
 from aarambh.aarambh_wrapper import AarambhWrapper
 from translation.translation import TranslationModel
 from image_recognition.image_recognition import ImageRecognitionModel
-from voice_recognition.voice_recognition import LiveVoiceRecognition
 
 # Initialize models
 try:
@@ -47,15 +48,6 @@ except Exception as e:
     logger.error(f"Failed to initialize image recognition model: {e}")
     raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
 
-try:
-    model_dir_sr = os.path.join(current_dir, "voice_recognition", "models", "wav2vec2-large-xlsr-53")
-    model_dir_er = os.path.join(current_dir, "voice_recognition", "models", "wav2vec2-lg-xlsr-en-speech-emotion-recognition")
-    voice_recog = LiveVoiceRecognition(model_dir_sr, model_dir_er)
-except Exception as e:
-    logger.error(f"Failed to initialize voice recognition model: {e}")
-    raise HTTPException(status_code=500, detail=f"Failed to initialize voice recognition model: {e}")
-
-# FastAPI app
 app = FastAPI()
 
 app.add_middleware(
@@ -104,22 +96,29 @@ def recognize_text_in_image(request: ImageRecognitionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/voice_recognition/speech/")
-def recognize_speech():
+async def recognize_speech(file: UploadFile = File(...)):
     try:
-        text = voice_recog.recognize_speech()
-        return {"recognized_speech": text}
+        contents = await file.read()
+        recognizer = sr.Recognizer()
+        audio_file = BytesIO(contents)
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
+            try:
+                text = recognizer.recognize_google(audio_data)
+                return {"recognized_speech": text}
+            except sr.UnknownValueError:
+                return {"recognized_speech": "Google Speech Recognition could not understand audio"}
+            except sr.RequestError as e:
+                return {"recognized_speech": f"Could not request results from Google Speech Recognition service; {e}"}
     except Exception as e:
-        logger.error(f"Error recognizing speech: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error recognizing speech: {e}")
+
 
 @app.post("/voice_recognition/emotion/")
-def recognize_emotion():
-    try:
-        emotion = voice_recog.recognize_emotion()
-        return {"recognized_emotion": emotion}
-    except Exception as e:
-        logger.error(f"Error recognizing emotion: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+async def recognize_emotion(file: UploadFile = File(...)):
+    # Placeholder for emotion recognition logic using live audio
+    # Implement your custom emotion recognition logic here
+    return {"recognized_emotion": "Emotion recognition is not implemented yet"}
 
 if __name__ == "__main__":
     import uvicorn
