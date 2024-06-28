@@ -1,65 +1,130 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+import sys
+import torch
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Ensure the current directory is in the system path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
 
 from aarambh.aarambh_wrapper import AarambhWrapper
-from text_generation.aarambh_text_generation_wrapper import AarambhTextGenerationWrapper
-from empathy.aarambh_empathy_wrapper import AarambhEmpathyWrapper
 from translation.translation import TranslationModel
 from image_recognition.image_recognition import ImageRecognitionModel
 from voice_recognition.voice_recognition import LiveVoiceRecognition
 
 # Initialize models
-aarambh = AarambhWrapper(
-    vocab_size=50257,
-    d_model=512,
-    nhead=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    dim_feedforward=2048,
-    max_seq_length=512
+try:
+    aarambh = AarambhWrapper(
+        vocab_size=50257,
+        d_model=512,
+        nhead=8,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
+        dim_feedforward=2048,
+        max_seq_length=5000
+    )
+    aarambh.load(os.path.join(current_dir, "..", "models", "aarambh_model.pth"))
+except Exception as e:
+    logger.error(f"Failed to load Aarambh model: {e}")
+    raise HTTPException(status_code=500, detail=f"Failed to load Aarambh model: {e}")
+
+try:
+    translator = TranslationModel(model_name='Helsinki-NLP/opus-mt-en-de')
+except Exception as e:
+    logger.error(f"Failed to initialize translation model: {e}")
+    raise HTTPException(status_code=500, detail=f"Failed to initialize translation model: {e}")
+
+try:
+    img_recog = ImageRecognitionModel()
+except Exception as e:
+    logger.error(f"Failed to initialize image recognition model: {e}")
+    raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
+
+try:
+    voice_recog = LiveVoiceRecognition()
+except Exception as e:
+    logger.error(f"Failed to initialize voice recognition model: {e}")
+    raise HTTPException(status_code=500, detail=f"Failed to initialize voice recognition model: {e}")
+
+# FastAPI app
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
-aarambh_text_gen = AarambhTextGenerationWrapper(
-    vocab_size=50257,
-    d_model=512,
-    nhead=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    dim_feedforward=2048,
-    max_seq_length=512
-)
+class QueryRequest(BaseModel):
+    prompt: str
 
-aarambh_empathy = AarambhEmpathyWrapper(
-    vocab_size=50257,
-    d_model=512,
-    nhead=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    dim_feedforward=2048,
-    max_seq_length=512
-)
+class TranslateRequest(BaseModel):
+    text: str
+    target_language: str
 
-# Load trained models
-aarambh.load("../models/aarambh_model.pth", "../models/aarambh_vocab.json")
-aarambh_text_gen.load("../models/aarambh_text_gen_model.pth", "../models/aarambh_text_gen_vocab.json")
-aarambh_empathy.load("../models/aarambh_empathy_model.pth", "../models/aarambh_empathy_vocab.json")
+class ImageRecognitionRequest(BaseModel):
+    image_path: str
 
-# Initialize other models
-translator = TranslationModel(model_name='Helsinki-NLP/opus-mt-en-de')
-img_recog = ImageRecognitionModel()
-voice_recog = LiveVoiceRecognition()
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Aarambh API"}
 
-# Example usage
-print("Aarambh Response:", aarambh.generate_response("Hello, how are you?"))
-print("Generated Text:", aarambh_text_gen.generate_text("Once upon a time"))
-print("Translation:", translator.translate("Hello, how are you?"))
-print("Empathetic Response:", aarambh_empathy.generate_empathetic_response("I'm feeling sad."))
-print("Image Text Recognition:", img_recog.recognize_text(r"D:\Aarambh\src\image_recognition\img.png"))
+@app.post("/generate/")
+def generate_response(request: QueryRequest):
+    try:
+        response = aarambh.generate_response(request.prompt)
+        return {"response": response}
+    except Exception as e:
+        logger.error(f"Error generating response: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Perform live speech recognition
-print("Voice Recognition (live):", voice_recog.recognize_speech())
+@app.post("/translate/")
+def translate_text(request: TranslateRequest):
+    try:
+        translated_text = translator.translate(request.text, request.target_language)
+        return {"translated_text": translated_text}
+    except Exception as e:
+        logger.error(f"Error translating text: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Perform live emotion recognition
-print("Emotion Recognition (live):", voice_recog.recognize_emotion())
+@app.post("/image_recognition/")
+def recognize_text_in_image(request: ImageRecognitionRequest):
+    try:
+        text = img_recog.recognize_text(request.image_path)
+        return {"recognized_text": text}
+    except Exception as e:
+        logger.error(f"Error recognizing text in image: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice_recognition/speech/")
+def recognize_speech():
+    try:
+        audio_file = voice_recog.record_audio()
+        text = voice_recog.recognize_speech(audio_file)
+        return {"recognized_speech": text}
+    except Exception as e:
+        logger.error(f"Error recognizing speech: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/voice_recognition/emotion/")
+def recognize_emotion():
+    try:
+        audio_file = voice_recog.record_audio()
+        emotion = voice_recog.recognize_emotion(audio_file)
+        return {"recognized_emotion": emotion}
+    except Exception as e:
+        logger.error(f"Error recognizing emotion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -22,7 +22,7 @@ class AarambhEmpathyWrapper:
     def train(self, dataset, epochs=3, batch_size=2, lr=5e-5):
         self.model.train()
         optimizer = optim.AdamW(self.model.parameters(), lr=lr)
-        
+
         for epoch in range(epochs):
             for batch in dataset.batch(batch_size):
                 input_texts = [text for text in batch]
@@ -37,9 +37,21 @@ class AarambhEmpathyWrapper:
                 print(f"Epoch: {epoch}, Loss: {loss.item()}")
 
     def save(self, model_path, vocab_path):
+        # Save the model's state dictionary with the correct positional encoder shape
+        pos_encoder_state_dict = self.model.pos_encoder.state_dict()
+        for key, value in pos_encoder_state_dict.items():
+            if "pos_encoder.embedding.weight" in key:
+                pos_encoder_state_dict[key] = value.view(1, -1, value.size(-1))
+        self.model.pos_encoder.load_state_dict(pos_encoder_state_dict)
         torch.save(self.model.state_dict(), model_path)
         self.tokenizer.save_vocab(vocab_path)
 
     def load(self, model_path, vocab_path):
+        # Load the model's state dictionary with the correct positional encoder shape
         self.model.load_state_dict(torch.load(model_path))
         self.tokenizer.load_vocab(vocab_path)
+        pos_encoder_state_dict = self.model.pos_encoder.state_dict()
+        for key, value in pos_encoder_state_dict.items():
+            if "pos_encoder.embedding.weight" in key:
+                pos_encoder_state_dict[key] = value.view(1, -1, value.size(-1))
+        self.model.pos_encoder.load_state_dict(pos_encoder_state_dict)
