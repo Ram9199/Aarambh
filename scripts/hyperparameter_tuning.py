@@ -5,9 +5,21 @@ from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import sys
 import os
+import logging
+from sklearn.model_selection import train_test_split
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 from aarambh.aarambh_wrapper import AarambhWrapper
 from aarambh.aarambh_tokenizer import AarambhTokenizer
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Define paths
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+MODEL_DIR = os.path.join(ROOT_DIR, 'models')
+VOCAB_PATH = os.path.join(MODEL_DIR, 'aarambh_vocab.json')
 
 def objective(trial):
     # Define hyperparameters to tune
@@ -22,6 +34,9 @@ def objective(trial):
     questions = ["What is AI?", "How does a neural network work?"]
     contexts = ["AI stands for Artificial Intelligence.", "A neural network is a series of algorithms."]
     answers = ["Artificial Intelligence", "series of algorithms"]
+
+    # Split data into training and validation sets
+    questions_train, questions_val, contexts_train, contexts_val, answers_train, answers_val = train_test_split(questions, contexts, answers, test_size=0.2, random_state=42)
 
     # Initialize the model
     tokenizer = AarambhTokenizer()
@@ -79,7 +94,8 @@ def objective(trial):
                 'answer_ids': self.tokenizer.tokenize(answer)
             }
 
-    dataloader = create_dataloader(questions, contexts, answers, tokenizer, batch_size=4)
+    train_loader = create_dataloader(questions_train, contexts_train, answers_train, tokenizer, batch_size=4)
+    val_loader = create_dataloader(questions_val, contexts_val, answers_val, tokenizer, batch_size=4)
 
     # Training
     model_wrapper.model.train()
@@ -87,7 +103,7 @@ def objective(trial):
     criterion = torch.nn.CrossEntropyLoss()
 
     for epoch in range(3):
-        for batch in dataloader:
+        for batch in train_loader:
             optimizer.zero_grad()
             combined_ids = batch['combined_ids']
             answer_ids = batch['answer_ids']
@@ -109,11 +125,56 @@ def objective(trial):
             loss.backward()
             optimizer.step()
 
-    return loss.item()
+    # Validation
+    model_wrapper.model.eval()
+    val_loss = 0
+    with torch.no_grad():
+        for batch in val_loader:
+            combined_ids = batch['combined_ids']
+            answer_ids = batch['answer_ids']
+
+            # Ensure that the sequence lengths and batch sizes match
+            combined_ids = combined_ids.view(-1, combined_ids.size(-1))
+            answer_ids = answer_ids.view(-1)
+
+            outputs = model_wrapper.model(combined_ids, combined_ids)
+            outputs = outputs.view(-1, model_wrapper.vocab_size)
+
+            # Ensure outputs and answer_ids have the same batch size
+            if outputs.size(0) != answer_ids.size(0):
+                min_size = min(outputs.size(0), answer_ids.size(0))
+                outputs = outputs[:min_size]
+                answer_ids = answer_ids[:min_size]
+
+            loss = criterion(outputs, answer_ids)
+            val_loss += loss.item()
+
+    avg_val_loss = val_loss / len(val_loader)
+    return avg_val_loss
 
 # Optuna study
 study = optuna.create_study(direction='minimize')
 study.optimize(objective, n_trials=20)
 
 # Best hyperparameters
-print(study.best_params)
+print("Best hyperparameters: ", study.best_params)
+
+# Save best model
+best_trial = study.best_trial
+best_params = best_trial.params
+
+# Initialize the model with the best hyperparameters
+tokenizer = AarambhTokenizer()
+tokenizer.load_vocab(VOCAB_PATH)
+model_wrapper = AarambhWrapper(
+    vocab_size=tokenizer.vocab_size,
+    d_model=best_params['d_model'],
+    nhead=best_params['nhead'],
+    num_encoder_layers=best_params['num_encoder_layers'],
+    num_decoder_layers=best_params['num_decoder_layers'],
+    dim_feedforward=best_params['dim_feedforward'],
+    max_seq_length=5000
+)
+
+# Save the best model
+model_wrapper.save(os.path.join(MODEL_DIR, 'aarambh_best_model.pth'), optim.Adam(model_wrapper.model.parameters()), 1)

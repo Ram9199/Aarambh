@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -15,7 +16,9 @@ MODEL_DIR = os.path.join(ROOT_DIR, 'models')
 VOCAB_PATH = os.path.join(MODEL_DIR, 'aarambh_vocab.json')
 MODEL_PATH = os.path.join(MODEL_DIR, 'aarambh_model.pth')
 INCREMENTAL_MODEL_PATH = os.path.join(MODEL_DIR, 'aarambh_model_incremental.pth')
+NEW_DATA_DIR = os.path.join(ROOT_DIR, 'new_data')  # Directory for new data
 
+# Custom Dataset Class
 class CustomDataset(torch.utils.data.Dataset):
     def __init__(self, questions, contexts, answers, tokenizer):
         assert len(questions) == len(contexts), "The number of questions and contexts must be the same"
@@ -37,6 +40,7 @@ class CustomDataset(torch.utils.data.Dataset):
             'answer_ids': self.tokenizer.tokenize(answer)
         }
 
+# Collate Function for DataLoader
 def pad_collate(batch):
     question_ids = pad_sequence([torch.tensor(item['question_ids']) for item in batch], batch_first=True, padding_value=0)
     context_ids = pad_sequence([torch.tensor(item['context_ids']) for item in batch], batch_first=True, padding_value=0)
@@ -46,10 +50,12 @@ def pad_collate(batch):
 
     return {'combined_ids': combined_ids, 'answer_ids': answer_ids}
 
+# Create DataLoader
 def create_dataloader(questions, contexts, answers, tokenizer, batch_size=2):
     dataset = CustomDataset(questions, contexts, answers, tokenizer)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=pad_collate)
 
+# Evaluate Model
 def evaluate(model_wrapper, dataloader):
     model_wrapper.model.eval()
     predictions, true_labels = [], []
@@ -70,6 +76,7 @@ def evaluate(model_wrapper, dataloader):
     accuracy = accuracy_score(true_labels, predictions)
     return accuracy
 
+# Train Incrementally
 def train_incrementally(model_wrapper, train_loader, val_loader, optimizer, epochs=3, start_epoch=0):
     model_wrapper.model.train()
     
@@ -108,29 +115,28 @@ def train_incrementally(model_wrapper, train_loader, val_loader, optimizer, epoc
                 param_group['lr'] *= 0.9  # Decrease learning rate by 10%
                 print(f"Decreased learning rate to: {param_group['lr']}")
 
-def main():
-    questions_list = [
-        ["New question set 1?", "New question set 2?"],
-        ["Another question set 1?", "Another question set 2?"]
-    ]
-    contexts_list = [
-        ["New context set 1.", "New context set 2."],
-        ["Another context set 1.", "Another context set 2."]
-    ]
-    answers_list = [
-        ["New answer set 1", "New answer set 2"],
-        ["Another answer set 1", "Another answer set 2"]
-    ]
+# Check for New Data Files
+def check_for_new_data():
+    new_files = []
+    for root, _, files in os.walk(NEW_DATA_DIR):
+        for file in files:
+            if file.endswith('.json'):
+                new_files.append(os.path.join(root, file))
+    return new_files
 
+# Load New Data from File
+def load_new_data(file_path):
+    import json
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    return data['questions'], data['contexts'], data['answers']
+
+# Main Function
+def main():
     tokenizer = AarambhTokenizer()
     print(f"Loading vocab from: {VOCAB_PATH}")
     tokenizer.load_vocab(VOCAB_PATH)
     vocab_size = tokenizer.vocab_size  # Ensure vocab_size is loaded correctly
-
-    dataloaders = [create_dataloader(questions, contexts, answers, tokenizer) for questions, contexts, answers in zip(questions_list, contexts_list, answers_list)]
-    
-    train_loader = dataloaders[0]
-    val_loader = dataloaders[1]
 
     max_seq_length = 5000  # This should match the value used when the model was saved
 
@@ -148,9 +154,26 @@ def main():
     
     start_epoch = model_wrapper.load(MODEL_PATH, optimizer)
 
-    train_incrementally(model_wrapper, train_loader, val_loader, optimizer, epochs=3, start_epoch=start_epoch)
+    while True:
+        new_files = check_for_new_data()
+        if not new_files:
+            print("No new data found. Sleeping for 30 minutes...")
+            time.sleep(1800)  # Sleep for 30 minutes
+            continue
 
-    model_wrapper.save(INCREMENTAL_MODEL_PATH, optimizer, start_epoch + 3)
+        for file_path in new_files:
+            print(f"Processing new data from: {file_path}")
+            questions, contexts, answers = load_new_data(file_path)
+            train_loader = create_dataloader(questions, contexts, answers, tokenizer)
+
+            # Use validation loader from previous data or create a new one
+            val_loader = create_dataloader(questions, contexts, answers, tokenizer)
+
+            train_incrementally(model_wrapper, train_loader, val_loader, optimizer, epochs=3, start_epoch=start_epoch)
+
+            start_epoch += 3
+            model_wrapper.save(INCREMENTAL_MODEL_PATH, optimizer, start_epoch)
+            os.remove(file_path)  # Remove processed file
 
 if __name__ == "__main__":
     main()
