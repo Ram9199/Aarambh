@@ -7,6 +7,10 @@ from pydantic import BaseModel
 import logging
 import speech_recognition as sr
 from io import BytesIO
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,33 +24,41 @@ from aarambh.aarambh_wrapper import AarambhWrapper
 from translation.translation import TranslationModel
 from image_recognition.image_recognition import ImageRecognitionModel
 
+def initialize_aarambh():
+    try:
+        aarambh = AarambhWrapper(
+            vocab_size=50257,
+            d_model=512,
+            nhead=8,
+            num_encoder_layers=6,
+            num_decoder_layers=6,
+            dim_feedforward=2048,
+            max_seq_length=5000
+        )
+        aarambh.load(os.path.join(current_dir, "..", "models", "aarambh_model.pth"))
+        return aarambh
+    except Exception as e:
+        logger.error(f"Failed to load Aarambh model: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load Aarambh model: {e}")
+
+def initialize_translator():
+    try:
+        return TranslationModel(model_name='Helsinki-NLP/opus-mt-en-de')
+    except Exception as e:
+        logger.error(f"Failed to initialize translation model: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize translation model: {e}")
+
+def initialize_image_recognition():
+    try:
+        return ImageRecognitionModel()
+    except Exception as e:
+        logger.error(f"Failed to initialize image recognition model: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
+
 # Initialize models
-try:
-    aarambh = AarambhWrapper(
-        vocab_size=50257,
-        d_model=512,
-        nhead=8,
-        num_encoder_layers=6,
-        num_decoder_layers=6,
-        dim_feedforward=2048,
-        max_seq_length=5000
-    )
-    aarambh.load(os.path.join(current_dir, "..", "models", "aarambh_model.pth"))
-except Exception as e:
-    logger.error(f"Failed to load Aarambh model: {e}")
-    raise HTTPException(status_code=500, detail=f"Failed to load Aarambh model: {e}")
-
-try:
-    translator = TranslationModel(model_name='Helsinki-NLP/opus-mt-en-de')
-except Exception as e:
-    logger.error(f"Failed to initialize translation model: {e}")
-    raise HTTPException(status_code=500, detail=f"Failed to initialize translation model: {e}")
-
-try:
-    img_recog = ImageRecognitionModel()
-except Exception as e:
-    logger.error(f"Failed to initialize image recognition model: {e}")
-    raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
+aarambh = initialize_aarambh()
+translator = initialize_translator()
+img_recog = initialize_image_recognition()
 
 app = FastAPI()
 
@@ -111,14 +123,24 @@ async def recognize_speech(file: UploadFile = File(...)):
             except sr.RequestError as e:
                 return {"recognized_speech": f"Could not request results from Google Speech Recognition service; {e}"}
     except Exception as e:
+        logger.error(f"Error recognizing speech: {e}")
         raise HTTPException(status_code=500, detail=f"Error recognizing speech: {e}")
-
 
 @app.post("/voice_recognition/emotion/")
 async def recognize_emotion(file: UploadFile = File(...)):
     # Placeholder for emotion recognition logic using live audio
     # Implement your custom emotion recognition logic here
     return {"recognized_emotion": "Emotion recognition is not implemented yet"}
+
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        # Implement your file processing logic here
+        return {"filename": file.filename, "content_type": file.content_type}
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {e}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -5,19 +5,32 @@ import math
 class Aarambh(nn.Module):
     def __init__(self, vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length):
         super(Aarambh, self).__init__()
+        self.d_model = d_model  # Store d_model as an instance variable
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.pos_encoder = PositionalEncoding(d_model, max_seq_length)
-        self.transformer = nn.Transformer(d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward)
-        self.fc_out = nn.Linear(d_model, vocab_size)
+        self.transformer = nn.Transformer(
+            d_model=d_model,
+            nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
+            dim_feedforward=dim_feedforward
+        )
+        self.fc_out = nn.Linear(d_model, vocab_size)  # Ensure this matches the checkpoint
         self._init_weights()
 
     def _init_weights(self):
         nn.init.kaiming_uniform_(self.embedding.weight, a=math.sqrt(5))
 
     def forward(self, src, tgt):
-        src_emb = self.embedding(src) + self.pos_encoder(src)
-        tgt_emb = self.embedding(tgt) + self.pos_encoder(tgt)
-        output = self.transformer(src_emb, tgt_emb)
+        # Ensure src and tgt have the same batch size
+        if src.size(0) != tgt.size(0):
+            raise ValueError("The batch size of src and tgt must be equal")
+
+        src = self.embedding(src) * math.sqrt(self.d_model)
+        src = self.pos_encoder(src)
+        tgt = self.embedding(tgt) * math.sqrt(self.d_model)
+        tgt = self.pos_encoder(tgt)
+        output = self.transformer(src, tgt)
         output = self.fc_out(output)
         return output
 
@@ -54,7 +67,7 @@ class PositionalEncoding(nn.Module):
         return self.pe[:x.size(0), :]
 
 # Example usage
-vocab_size = 50257
+vocab_size = 18
 d_model = 512
 nhead = 8
 num_encoder_layers = 6

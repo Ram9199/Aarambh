@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -80,10 +81,35 @@ class AarambhWrapper:
         }
 
     def save(self, model_path, optimizer, epoch):
-        self.model.save(model_path, optimizer, epoch)
-        self.tokenizer.save_vocab('models/aarambh_vocab.json')
+        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        model_save_path = os.path.join(root_path, 'models', model_path)
+        vocab_save_path = os.path.join(root_path, 'aarambh_vocab.json')
+        
+        os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+        self.model.save(model_save_path, optimizer, epoch)
+        self.tokenizer.save_vocab(vocab_save_path)
 
-    def load(self, model_path, optimizer=None):
-        epoch = self.model.load(model_path, optimizer)
-        self.tokenizer.load_vocab('models/aarambh_vocab.json')
+    def load(self, model_load_path, optimizer=None):
+        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        model_load_path = os.path.join(root_path, 'models', model_load_path)
+        vocab_load_path = os.path.join(root_path, 'models', 'aarambh_vocab.json')
+        
+        print(f"Loading vocab from: {vocab_load_path}")
+
+        # Load the vocabulary
+        self.tokenizer.load_vocab(vocab_load_path)
+        if not self.tokenizer.vocab_size:
+            raise ValueError("Vocabulary file is empty or not properly loaded.")
+        
+        self.vocab_size = self.tokenizer.vocab_size
+        d_model = 512
+        nhead = 8
+        num_encoder_layers = 6
+        num_decoder_layers = 6
+        dim_feedforward = 2048
+        max_seq_length = 5000
+        
+        self.model = Aarambh(self.vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length)
+        
+        epoch = self.model.load(model_load_path, optimizer)
         return epoch

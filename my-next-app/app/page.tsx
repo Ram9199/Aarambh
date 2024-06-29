@@ -276,10 +276,7 @@ export default function Home() {
 
                 if (res.ok) {
                   const data = await res.json();
-                  setChats((prevChats) => [
-                    ...prevChats,
-                    { text: data.response, isUser: false },
-                  ]);
+                  setPrompt(data.response); // Set the recognized text in the input box
                 } else {
                   setChats((prevChats) => [
                     ...prevChats,
@@ -303,6 +300,7 @@ export default function Home() {
             recorder.start();
             setTimeout(() => {
               recorder.stop();
+              stream.getTracks().forEach((track) => track.stop()); // Stop the microphone
             }, 5000); // Record for 5 seconds
           })
           .catch((err) => {

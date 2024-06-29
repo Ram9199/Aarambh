@@ -1,3 +1,4 @@
+import os
 import json
 
 class AarambhTokenizer:
@@ -25,11 +26,35 @@ class AarambhTokenizer:
         return ' '.join([self.reverse_vocab.get(token, "<unk>") for token in tokens])
 
     def save_vocab(self, vocab_path):
+        vocab_dir = os.path.join('D:', 'Aarambh', 'models')
+        os.makedirs(vocab_dir, exist_ok=True)  # Ensure the directory exists
+        vocab_path = os.path.join(vocab_dir, vocab_path)
         with open(vocab_path, 'w') as f:
             json.dump(self.vocab, f)
 
     def load_vocab(self, vocab_path):
+        print(f"Attempting to load vocab from: {vocab_path}") 
+        vocab_path = os.path.join('D:', 'Aarambh', 'models', vocab_path)
         with open(vocab_path, 'r') as f:
-            self.vocab = json.load(f)
+            vocab_data = json.load(f)
+        self.vocab = vocab_data
         self.reverse_vocab = {idx: token for token, idx in self.vocab.items()}
         self.vocab_size = len(self.vocab)
+
+# Step 1: Create an instance of AarambhTokenizer
+tokenizer = AarambhTokenizer()
+
+# Step 2: Build the vocabulary using a list of texts
+texts = [
+    "This is a sample text.",
+    "Another example of text data.",
+    "More text data to build the vocabulary."
+]
+tokenizer.build_vocab(texts)
+
+# Step 3: Save the vocabulary to a file
+vocab_path = 'aarambh_vocab.json'
+tokenizer.save_vocab(vocab_path)
+
+
+print(f"Vocabulary saved to D:\\Aarambh\\models\\{vocab_path}")
