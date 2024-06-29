@@ -1,5 +1,15 @@
 import os
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("TOKENIZER.log")
+
+file_handler = logging.FileHandler("TOKENIZER.log")
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 class AarambhTokenizer:
     def __init__(self):
@@ -27,22 +37,16 @@ class AarambhTokenizer:
 
     def save_vocab(self, vocab_filename):
         vocab_dir = os.path.join('d:', 'Aarambh', 'models')
-        os.makedirs(vocab_dir, exist_ok=True)  # Ensure the directory exists
+        os.makedirs(vocab_dir, exist_ok=True)
         vocab_path = os.path.join(vocab_dir, vocab_filename)
         with open(vocab_path, 'w') as f:
             json.dump(self.vocab, f)
         print(f"Vocabulary saved to {vocab_path}")
 
     def load_vocab(self, vocab_filename):
-        # Print the initial vocab_filename for debugging
         print(f"Initial vocab_filename: {vocab_filename}")
-        
-        # Construct the full path
         vocab_path = os.path.join('d:', 'Aarambh', 'models', vocab_filename)
-        
-        # Print the constructed vocab_path for debugging
         print(f"Constructed vocab_path: {vocab_path}")
-        
         try:
             with open(vocab_path, 'r') as f:
                 vocab_data = json.load(f)
@@ -53,18 +57,3 @@ class AarambhTokenizer:
         except FileNotFoundError as e:
             print(f"FileNotFoundError: {e}")
             raise
-
-# Step 1: Create an instance of AarambhTokenizer
-tokenizer = AarambhTokenizer()
-
-# Step 2: Build the vocabulary using a list of texts
-texts = [
-    "This is a sample text.",
-    "Another example of text data.",
-    "More text data to build the vocabulary."
-]
-tokenizer.build_vocab(texts)
-
-# Step 3: Save the vocabulary to a file
-vocab_filename = 'aarambh_vocab.json'
-tokenizer.save_vocab(vocab_filename)

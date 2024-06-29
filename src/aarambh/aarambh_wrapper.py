@@ -2,11 +2,10 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
-from .aarambh import Aarambh  # Relative import
+from .aarambh import Aarambh  # Adjusted import for module
 from .aarambh_tokenizer import AarambhTokenizer
 from torch.nn.utils.rnn import pad_sequence
-from data_loader import build_vocab, create_dataloader
+from src.data_loader import build_vocab, create_dataloader
 
 class AarambhWrapper:
     def __init__(self, vocab_size, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, max_seq_length=512):
@@ -14,15 +13,15 @@ class AarambhWrapper:
         self.tokenizer = AarambhTokenizer()
         self.model = Aarambh(vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length)
 
-    def generate_response(self, prompt, max_length=50):
-        tokens = self.tokenizer.tokenize(prompt)
-        print("Tokenized input:", tokens)
+    def generate_response(self, question, context, max_length=50):
+        # Combine question and context into a single input
+        input_text = f"question: {question} context: {context}"
+        tokens = self.tokenizer.tokenize(input_text)
         input_ids = torch.tensor([tokens])
         self.model.eval()
         with torch.no_grad():
             outputs = self.model(input_ids, input_ids)
             response_tokens = outputs.argmax(dim=-1).squeeze().tolist()
-            print("Response tokens:", response_tokens)
             response = self.tokenizer.detokenize(response_tokens)
             return response
 
@@ -86,7 +85,7 @@ class AarambhWrapper:
         vocab_save_path = os.path.join(os.path.dirname(model_save_path), 'aarambh_vocab.json')
         
         os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
-        self.model.save(model_save_path, optimizer, epoch)
+        self.model.save(model_save_path, optimizer, epoch, self.vocab_size)
         self.tokenizer.save_vocab(vocab_save_path)
         print(f"Model saved to: {model_save_path}")
         print(f"Vocabulary saved to: {vocab_save_path}")
@@ -121,16 +120,3 @@ class AarambhWrapper:
         self.vocab_size = len(vocab)
         self.model.embedding = torch.nn.Embedding(self.vocab_size, self.model.d_model)
         print(f"Vocabulary updated. New size: {self.vocab_size}")
-
-# Example usage
-if __name__ == "__main__":
-    data_dir = os.path.abspath('data')
-    preprocessed_data_path = os.path.join(data_dir, 'preprocessed_data.json')
-    vocab_path = os.path.join('models', 'aarambh_vocab.json')
-
-    # Build and update vocab
-    aarambh_wrapper = AarambhWrapper(vocab_size=0)  # Initial placeholder
-    aarambh_wrapper.build_and_update_vocab(preprocessed_data_path, vocab_path)
-
-    # Initialize dataloader
-    dataloader = create_dataloader(preprocessed_data_path, batch_size=2)

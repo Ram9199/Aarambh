@@ -2,30 +2,46 @@ import os
 import sys
 import json
 import torch
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, Form, UploadFile, File
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import logging
-import speech_recognition as sr
-from io import BytesIO
 from dotenv import load_dotenv
+from io import BytesIO
+import speech_recognition as sr
+from .aarambh.aarambh_wrapper import AarambhWrapper
+from src.data_loader import create_dataloader, build_vocab
 
-# Load environment variables
+# Load environment variables from .env file
 load_dotenv()
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup logging
+log_file_path = os.path.join(os.path.dirname(__file__), 'qa_model.log')
+logging.basicConfig(
+    filename=log_file_path,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-# Ensure the current directory is in the system path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
+app = FastAPI()
 
-from aarambh.aarambh_wrapper import AarambhWrapper
-from translation.translation import TranslationModel
-from image_recognition.image_recognition import ImageRecognitionModel
-from data_loader import create_dataloader, build_vocab
+# Add CORS middleware
+origins = [
+    "http://localhost",
+    "http://localhost:3000",  # Next.js development server
+    "http://localhost:8000",
+    "https://your-deployment-url"  # Update with your deployment URL
+]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize Aarambh model and tokenizer
 def initialize_aarambh(vocab_size):
     try:
         aarambh = AarambhWrapper(
@@ -40,22 +56,8 @@ def initialize_aarambh(vocab_size):
         aarambh.load(os.path.join(current_dir, "..", "models", "aarambh_model.pth"))
         return aarambh
     except Exception as e:
-        logger.error(f"Failed to load Aarambh model: {e}")
+        logging.error(f"Failed to load Aarambh model: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to load Aarambh model: {e}")
-
-def initialize_translator():
-    try:
-        return TranslationModel(model_name='Helsinki-NLP/opus-mt-en-de')
-    except Exception as e:
-        logger.error(f"Failed to initialize translation model: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to initialize translation model: {e}")
-
-def initialize_image_recognition():
-    try:
-        return ImageRecognitionModel()
-    except Exception as e:
-        logger.error(f"Failed to initialize image recognition model: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
 
 def initialize_dataloader_and_vocab():
     try:
@@ -63,102 +65,29 @@ def initialize_dataloader_and_vocab():
         preprocessed_data_path = os.path.join(data_dir, 'preprocessed_data.json')
         vocab_path = os.path.join(current_dir, '..', 'models', 'aarambh_vocab.json')
         
-        vocab = build_vocab(preprocessed_data_path, vocab_path)
+        with open(vocab_path, 'r', encoding='utf-8') as f:
+            vocab = json.load(f)
+        
         vocab_size = len(vocab)
         
         dataloader = create_dataloader(preprocessed_data_path, batch_size=2)
         return dataloader, vocab_size
     except Exception as e:
-        logger.error(f"Failed to create DataLoader and load vocabulary: {e}")
+        logging.error(f"Failed to create DataLoader and load vocabulary: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create DataLoader and load vocabulary: {e}")
 
 # Initialize models
 dataloader, vocab_size = initialize_dataloader_and_vocab()
 aarambh = initialize_aarambh(vocab_size)
-translator = initialize_translator()
-img_recog = initialize_image_recognition()
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
-
-class QueryRequest(BaseModel):
-    prompt: str
-
-class TranslateRequest(BaseModel):
-    text: str
-    target_language: str
-
-class ImageRecognitionRequest(BaseModel):
-    image_path: str
 
 @app.post("/generate/")
-def generate_response(request: QueryRequest):
+async def generate_response(question: str = Form(...), context: str = Form(...)):
     try:
-        response = aarambh.generate_response(request.prompt)
-        return {"response": response}
+        response = aarambh.generate_response(question, context)
+        return JSONResponse(content={"response": response})
     except Exception as e:
-        logger.error(f"Error generating response: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/translate/")
-def translate_text(request: TranslateRequest):
-    try:
-        translated_text = translator.translate(request.text, request.target_language)
-        return {"translated_text": translated_text}
-    except Exception as e:
-        logger.error(f"Error translating text: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/image_recognition/")
-def recognize_text_in_image(request: ImageRecognitionRequest):
-    try:
-        text = img_recog.recognize_text(request.image_path)
-        return {"recognized_text": text}
-    except Exception as e:
-        logger.error(f"Error recognizing text in image: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/voice_recognition/speech/")
-async def recognize_speech(file: UploadFile = File(...)):
-    try:
-        contents = await file.read()
-        recognizer = sr.Recognizer()
-        audio_file = BytesIO(contents)
-        with sr.AudioFile(audio_file) as source:
-            audio_data = recognizer.record(source)
-            try:
-                text = recognizer.recognize_google(audio_data)
-                return {"recognized_speech": text}
-            except sr.UnknownValueError:
-                return {"recognized_speech": "Google Speech Recognition could not understand audio"}
-            except sr.RequestError as e:
-                return {"recognized_speech": f"Could not request results from Google Speech Recognition service; {e}"}
-    except Exception as e:
-        logger.error(f"Error recognizing speech: {e}")
-        raise HTTPException(status_code=500, detail=f"Error recognizing speech: {e}")
-
-@app.post("/voice_recognition/emotion/")
-async def recognize_emotion(file: UploadFile = File(...)):
-    # Placeholder for emotion recognition logic using live audio
-    # Implement your custom emotion recognition logic here
-    return {"recognized_emotion": "Emotion recognition is not implemented yet"}
-
-@app.post("/upload/")
-async def upload_file(file: UploadFile = File(...)):
-    try:
-        contents = await file.read()
-        # Implement your file processing logic here
-        return {"filename": file.filename, "content_type": file.content_type}
-    except Exception as e:
-        logger.error(f"Error uploading file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {e}")
+        logging.error(f"Error generating response: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn

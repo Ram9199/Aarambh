@@ -3,16 +3,19 @@ import os
 import sys
 import time
 
+# Add the src directory to the Python path
+SRC_DIR = os.path.abspath('src')
+sys.path.append(SRC_DIR)
+
 # Set up logging
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Define the paths to the scripts
-SRC_DIR = os.path.abspath('src')
 SCRIPTS_DIR = os.path.abspath('scripts')
 
-PREPROCESS_DATA_SCRIPT = os.path.join(SRC_DIR, 'preprocess_data.py')
+PREPROCESS_DATA_SCRIPT = os.path.join('data', 'preprocess_data.py')
 BUILD_VOCAB_SCRIPT = os.path.join(SRC_DIR, 'build_vocab.py')
 TRAIN_SCRIPT = os.path.join(SRC_DIR, 'train_aarambh.py')
 EVALUATE_SCRIPT = os.path.join(SRC_DIR, 'evaluate_aarambh.py')
