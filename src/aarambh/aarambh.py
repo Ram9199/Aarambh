@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from data_loader import build_vocab  # Import build_vocab function
 
 class Aarambh(nn.Module):
     def __init__(self, vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length):
@@ -34,11 +35,12 @@ class Aarambh(nn.Module):
         output = self.fc_out(output)
         return output
 
-    def save(self, model_path, optimizer, epoch):
+    def save(self, model_path, optimizer, epoch, vocab_size):
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'vocab_size': vocab_size,
             'pos_encoder': self.pos_encoder.pe
         }, model_path)
 
@@ -48,7 +50,7 @@ class Aarambh(nn.Module):
         self.pos_encoder.pe.copy_(checkpoint['pos_encoder'])
         if optimizer is not None:
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint['epoch']
+        return checkpoint['epoch'], checkpoint['vocab_size']
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -67,7 +69,11 @@ class PositionalEncoding(nn.Module):
         return self.pe[:x.size(0), :]
 
 # Example usage
-vocab_size = 18
+preprocessed_data_path = r'D:\Aarambh\data\preprocessed_data.json'
+vocab_path = r'D:\Aarambh\models\aarambh_vocab.json'
+vocab = build_vocab(preprocessed_data_path, vocab_path)
+vocab_size = len(vocab)
+
 d_model = 512
 nhead = 8
 num_encoder_layers = 6
@@ -79,11 +85,11 @@ model = Aarambh(vocab_size, d_model, nhead, num_encoder_layers, num_decoder_laye
 optimizer = torch.optim.Adam(model.parameters())
 
 # Save the model
-model.save('models/aarambh_model.pth', optimizer, 1)
+model.save('models/aarambh_model.pth', optimizer, 1, vocab_size)
 
 # Create a new optimizer object
 new_optimizer = torch.optim.Adam(model.parameters())
 
 # Load the model
-loaded_epoch = model.load('models/aarambh_model.pth', new_optimizer)
-print(f"Loaded model at epoch {loaded_epoch}")
+loaded_epoch, loaded_vocab_size = model.load('models/aarambh_model.pth', new_optimizer)
+print(f"Loaded model at epoch {loaded_epoch} with vocab size {loaded_vocab_size}")

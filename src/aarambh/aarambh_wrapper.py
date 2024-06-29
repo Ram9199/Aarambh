@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from .aarambh import Aarambh  # Relative import
 from .aarambh_tokenizer import AarambhTokenizer
 from torch.nn.utils.rnn import pad_sequence
+from data_loader import build_vocab, create_dataloader
 
 class AarambhWrapper:
     def __init__(self, vocab_size, d_model=512, nhead=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048, max_seq_length=512):
@@ -114,3 +115,22 @@ class AarambhWrapper:
         epoch = self.model.load(model_load_path, optimizer)
         print(f"Model loaded from: {model_load_path} at epoch {epoch}")
         return epoch
+
+    def build_and_update_vocab(self, preprocessed_data_path, vocab_path):
+        vocab = build_vocab(preprocessed_data_path, vocab_path)
+        self.vocab_size = len(vocab)
+        self.model.embedding = torch.nn.Embedding(self.vocab_size, self.model.d_model)
+        print(f"Vocabulary updated. New size: {self.vocab_size}")
+
+# Example usage
+if __name__ == "__main__":
+    data_dir = os.path.abspath('data')
+    preprocessed_data_path = os.path.join(data_dir, 'preprocessed_data.json')
+    vocab_path = os.path.join('models', 'aarambh_vocab.json')
+
+    # Build and update vocab
+    aarambh_wrapper = AarambhWrapper(vocab_size=0)  # Initial placeholder
+    aarambh_wrapper.build_and_update_vocab(preprocessed_data_path, vocab_path)
+
+    # Initialize dataloader
+    dataloader = create_dataloader(preprocessed_data_path, batch_size=2)

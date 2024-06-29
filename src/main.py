@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import torch
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,11 +24,12 @@ sys.path.append(current_dir)
 from aarambh.aarambh_wrapper import AarambhWrapper
 from translation.translation import TranslationModel
 from image_recognition.image_recognition import ImageRecognitionModel
+from data_loader import create_dataloader, build_vocab
 
-def initialize_aarambh():
+def initialize_aarambh(vocab_size):
     try:
         aarambh = AarambhWrapper(
-            vocab_size=50257,
+            vocab_size=vocab_size,
             d_model=512,
             nhead=8,
             num_encoder_layers=6,
@@ -55,8 +57,24 @@ def initialize_image_recognition():
         logger.error(f"Failed to initialize image recognition model: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to initialize image recognition model: {e}")
 
+def initialize_dataloader_and_vocab():
+    try:
+        data_dir = os.path.abspath(os.path.join(current_dir, '..', 'data'))
+        preprocessed_data_path = os.path.join(data_dir, 'preprocessed_data.json')
+        vocab_path = os.path.join(current_dir, '..', 'models', 'aarambh_vocab.json')
+        
+        vocab = build_vocab(preprocessed_data_path, vocab_path)
+        vocab_size = len(vocab)
+        
+        dataloader = create_dataloader(preprocessed_data_path, batch_size=2)
+        return dataloader, vocab_size
+    except Exception as e:
+        logger.error(f"Failed to create DataLoader and load vocabulary: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create DataLoader and load vocabulary: {e}")
+
 # Initialize models
-aarambh = initialize_aarambh()
+dataloader, vocab_size = initialize_dataloader_and_vocab()
+aarambh = initialize_aarambh(vocab_size)
 translator = initialize_translator()
 img_recog = initialize_image_recognition()
 
