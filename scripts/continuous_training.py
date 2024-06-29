@@ -1,11 +1,11 @@
 import os
 import torch
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from sklearn.metrics import accuracy_score
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 from aarambh.aarambh_wrapper import AarambhWrapper
 from aarambh.aarambh_tokenizer import AarambhTokenizer
 

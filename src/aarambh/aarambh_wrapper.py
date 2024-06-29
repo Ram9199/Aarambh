@@ -3,7 +3,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from .aarambh import Aarambh
+from .aarambh import Aarambh  # Relative import
 from .aarambh_tokenizer import AarambhTokenizer
 from torch.nn.utils.rnn import pad_sequence
 
@@ -81,18 +81,18 @@ class AarambhWrapper:
         }
 
     def save(self, model_path, optimizer, epoch):
-        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        model_save_path = os.path.join(root_path, 'models', model_path)
-        vocab_save_path = os.path.join(root_path, 'aarambh_vocab.json')
+        model_save_path = os.path.abspath(model_path)
+        vocab_save_path = os.path.join(os.path.dirname(model_save_path), 'aarambh_vocab.json')
         
         os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
         self.model.save(model_save_path, optimizer, epoch)
         self.tokenizer.save_vocab(vocab_save_path)
+        print(f"Model saved to: {model_save_path}")
+        print(f"Vocabulary saved to: {vocab_save_path}")
 
     def load(self, model_load_path, optimizer=None):
-        root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        model_load_path = os.path.join(root_path, 'models', model_load_path)
-        vocab_load_path = os.path.join(root_path, 'models', 'aarambh_vocab.json')
+        model_load_path = os.path.abspath(model_load_path)
+        vocab_load_path = os.path.join(os.path.dirname(model_load_path), 'aarambh_vocab.json')
         
         print(f"Loading vocab from: {vocab_load_path}")
 
@@ -112,4 +112,5 @@ class AarambhWrapper:
         self.model = Aarambh(self.vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, max_seq_length)
         
         epoch = self.model.load(model_load_path, optimizer)
+        print(f"Model loaded from: {model_load_path} at epoch {epoch}")
         return epoch
